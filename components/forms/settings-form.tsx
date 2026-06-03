@@ -1,5 +1,6 @@
 "use client";
 
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Save } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -8,15 +9,39 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/toast";
+import { queryKeys } from "@/lib/query/keys";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/lib/types/database";
 
 export function SettingsForm({ profile, userId }: { profile: Profile | null; userId: string }) {
+  const queryClient = useQueryClient();
   const [fullName, setFullName] = useState(profile?.full_name || "");
   const [defaultRate, setDefaultRate] = useState(String(profile?.default_hourly_rate || 0));
   const [currency, setCurrency] = useState(profile?.currency || "VND");
-  const [loading, setLoading] = useState(false);
-  const supabase = createClient();
+  const saveProfileMutation = useMutation({
+    mutationFn: async () => {
+      const rate = Number(defaultRate || 0);
+      const supabase = createClient();
+      const { error } = await supabase.from("profiles").upsert({
+        id: userId,
+        full_name: fullName.trim() || null,
+        default_hourly_rate: rate,
+        currency
+      });
+
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.settings.profile }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all })
+      ]);
+      toast({ title: "Đã lưu cài đặt" });
+    },
+    onError: (error) => {
+      toast({ title: "Không thể lưu cài đặt", description: error.message, variant: "destructive" });
+    }
+  });
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -27,21 +52,7 @@ export function SettingsForm({ profile, userId }: { profile: Profile | null; use
       return;
     }
 
-    setLoading(true);
-    const { error } = await supabase.from("profiles").upsert({
-      id: userId,
-      full_name: fullName.trim() || null,
-      default_hourly_rate: rate,
-      currency
-    });
-    setLoading(false);
-
-    if (error) {
-      toast({ title: "Không thể lưu cài đặt", description: error.message, variant: "destructive" });
-      return;
-    }
-
-    toast({ title: "Đã lưu cài đặt" });
+    saveProfileMutation.mutate();
   }
 
   return (
@@ -74,9 +85,9 @@ export function SettingsForm({ profile, userId }: { profile: Profile | null; use
               </Select>
             </div>
           </div>
-          <Button disabled={loading}>
+          <Button disabled={saveProfileMutation.isPending}>
             <Save className="h-4 w-4" />
-            {loading ? "Đang lưu..." : "Lưu cài đặt"}
+            {saveProfileMutation.isPending ? "Đang lưu..." : "Lưu cài đặt"}
           </Button>
         </form>
       </CardContent>

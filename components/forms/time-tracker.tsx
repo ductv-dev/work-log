@@ -1,5 +1,6 @@
 "use client";
 
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Play, Plus, Square } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
 import { calculateAmount, formatMoney, formatTimer, getDurationMinutes, resolveHourlyRate } from "@/lib/calculations";
 import { todayISO } from "@/lib/dates";
+import { queryKeys } from "@/lib/query/keys";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import type { Client, Profile } from "@/lib/types/database";
 import type { ProjectWithClient } from "@/lib/types/app";
@@ -23,6 +25,20 @@ type RunningTimer = {
   description: string;
   isBillable: boolean;
   startedAt: Date;
+};
+
+type TimeEntryPayload = {
+  user_id: string;
+  client_id: string | null;
+  project_id: string;
+  description: string;
+  start_time: string | null;
+  end_time: string | null;
+  duration_minutes: number;
+  hourly_rate: number;
+  amount: number;
+  is_billable: boolean;
+  entry_date: string;
 };
 
 export function TimeTracker({
@@ -36,13 +52,13 @@ export function TimeTracker({
   profile: Profile | null;
   userId: string;
 }) {
+  const queryClient = useQueryClient();
   const [timerClientId, setTimerClientId] = useState("none");
   const [timerProjectId, setTimerProjectId] = useState("none");
   const [timerDescription, setTimerDescription] = useState("");
   const [timerBillable, setTimerBillable] = useState(true);
   const [running, setRunning] = useState<RunningTimer | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [saving, setSaving] = useState(false);
 
   const [manualClientId, setManualClientId] = useState("none");
   const [manualProjectId, setManualProjectId] = useState("none");
@@ -52,7 +68,22 @@ export function TimeTracker({
   const [manualDuration, setManualDuration] = useState("");
   const [manualDescription, setManualDescription] = useState("");
   const [manualBillable, setManualBillable] = useState(true);
-  const supabase = createSupabaseClient();
+  const createEntryMutation = useMutation({
+    mutationFn: async (payload: TimeEntryPayload) => {
+      const supabase = createSupabaseClient();
+      const { error } = await supabase.from("time_entries").insert(payload);
+
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.timeEntries.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.reports.all })
+      ]);
+    }
+  });
+  const saving = createEntryMutation.isPending;
 
   useEffect(() => {
     if (!running) return;
@@ -118,24 +149,22 @@ export function TimeTracker({
     const durationMinutes = getDurationMinutes(running.startedAt, end);
     const preview = buildBillingPreview(projects, clients, profile, running.projectId, running.isBillable, durationMinutes);
 
-    setSaving(true);
-    const { error } = await supabase.from("time_entries").insert({
-      user_id: userId,
-      client_id: running.clientId === "none" ? preview.clientId : running.clientId,
-      project_id: running.projectId,
-      description: running.description,
-      start_time: running.startedAt.toISOString(),
-      end_time: end.toISOString(),
-      duration_minutes: durationMinutes,
-      hourly_rate: preview.hourlyRate,
-      amount: preview.amount,
-      is_billable: running.isBillable,
-      entry_date: running.startedAt.toISOString().slice(0, 10)
-    });
-    setSaving(false);
-
-    if (error) {
-      toast({ title: "Không thể lưu bản ghi thời gian từ bộ đếm", description: error.message, variant: "destructive" });
+    try {
+      await createEntryMutation.mutateAsync({
+        user_id: userId,
+        client_id: running.clientId === "none" ? preview.clientId : running.clientId,
+        project_id: running.projectId,
+        description: running.description,
+        start_time: running.startedAt.toISOString(),
+        end_time: end.toISOString(),
+        duration_minutes: durationMinutes,
+        hourly_rate: preview.hourlyRate,
+        amount: preview.amount,
+        is_billable: running.isBillable,
+        entry_date: running.startedAt.toISOString().slice(0, 10)
+      });
+    } catch (error) {
+      toast({ title: "Không thể lưu bản ghi thời gian từ bộ đếm", description: error instanceof Error ? error.message : "Vui lòng thử lại.", variant: "destructive" });
       return;
     }
 
@@ -163,24 +192,22 @@ export function TimeTracker({
     const endTime = manualEnd ? new Date(`${manualDate}T${manualEnd}`).toISOString() : null;
     const preview = buildBillingPreview(projects, clients, profile, manualProjectId, manualBillable, durationMinutes);
 
-    setSaving(true);
-    const { error } = await supabase.from("time_entries").insert({
-      user_id: userId,
-      client_id: manualClientId === "none" ? preview.clientId : manualClientId,
-      project_id: manualProjectId,
-      description: manualDescription.trim(),
-      start_time: startTime,
-      end_time: endTime,
-      duration_minutes: durationMinutes,
-      hourly_rate: preview.hourlyRate,
-      amount: preview.amount,
-      is_billable: manualBillable,
-      entry_date: manualDate
-    });
-    setSaving(false);
-
-    if (error) {
-      toast({ title: "Không thể tạo bản ghi thời gian", description: error.message, variant: "destructive" });
+    try {
+      await createEntryMutation.mutateAsync({
+        user_id: userId,
+        client_id: manualClientId === "none" ? preview.clientId : manualClientId,
+        project_id: manualProjectId,
+        description: manualDescription.trim(),
+        start_time: startTime,
+        end_time: endTime,
+        duration_minutes: durationMinutes,
+        hourly_rate: preview.hourlyRate,
+        amount: preview.amount,
+        is_billable: manualBillable,
+        entry_date: manualDate
+      });
+    } catch (error) {
+      toast({ title: "Không thể tạo bản ghi thời gian", description: error instanceof Error ? error.message : "Vui lòng thử lại.", variant: "destructive" });
       return;
     }
 

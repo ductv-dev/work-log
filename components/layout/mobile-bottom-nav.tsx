@@ -1,16 +1,24 @@
 "use client";
 
+import { cn } from "@/lib/utils";
+import {
+  BarChart3,
+  FolderKanban,
+  LayoutDashboard,
+  Settings,
+  Timer,
+  UsersRound,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, FolderKanban, LayoutDashboard, Settings, Timer } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 const items = [
   { href: "/dashboard", label: "Tổng", icon: LayoutDashboard },
   { href: "/time", label: "Giờ", icon: Timer },
   { href: "/projects", label: "Dự án", icon: FolderKanban },
+  { href: "/clients", label: "Khách", icon: UsersRound },
   { href: "/reports", label: "Báo cáo", icon: BarChart3 },
-  { href: "/settings", label: "Cài đặt", icon: Settings }
+  { href: "/settings", label: "Cài đặt", icon: Settings },
 ];
 
 export function MobileBottomNav() {
@@ -28,10 +36,16 @@ export function MobileBottomNav() {
               href={item.href}
               className={cn(
                 "flex h-14 flex-col items-center justify-center gap-1 rounded-3xl text-[10px] font-semibold text-slate-500 transition-all duration-200 active:scale-95 dark:text-white/60",
-                active && "bg-white/75 text-indigo-600 shadow-lg shadow-indigo-500/15 dark:bg-white/12 dark:text-white"
+                active &&
+                  "bg-white/75 text-indigo-600 shadow-lg shadow-indigo-500/15 dark:bg-white/12 dark:text-white",
               )}
             >
-              <Icon className={cn("h-5 w-5 transition-transform", active && "-translate-y-0.5")} />
+              <Icon
+                className={cn(
+                  "h-5 w-5 transition-transform",
+                  active && "-translate-y-0.5",
+                )}
+              />
               <span>{item.label}</span>
             </Link>
           );

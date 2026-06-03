@@ -11,32 +11,35 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/components/ui/toast";
 import { formatDuration, formatMoney } from "@/lib/calculations";
-import { createClient as createSupabaseClient } from "@/lib/supabase/client";
-import type { Client, Profile } from "@/lib/types/database";
-import type { ProjectWithClient, TimeEntryWithRelations } from "@/lib/types/app";
+import { useClients, useProfile, useProjects, useReportEntries } from "@/lib/hooks/use-worklog-queries";
 
 export function ReportsView({
-  initialEntries,
-  clients,
-  projects,
-  profile,
   initialStartDate,
   initialEndDate
 }: {
-  initialEntries: TimeEntryWithRelations[];
-  clients: Client[];
-  projects: ProjectWithClient[];
-  profile: Profile | null;
   initialStartDate: string;
   initialEndDate: string;
 }) {
-  const [entries, setEntries] = useState(initialEntries);
   const [startDate, setStartDate] = useState(initialStartDate);
   const [endDate, setEndDate] = useState(initialEndDate);
   const [clientId, setClientId] = useState("all");
   const [projectId, setProjectId] = useState("all");
-  const [loading, setLoading] = useState(false);
-  const supabase = createSupabaseClient();
+  const [appliedFilters, setAppliedFilters] = useState({
+    startDate: initialStartDate,
+    endDate: initialEndDate,
+    clientId: "all",
+    projectId: "all"
+  });
+  const clientsQuery = useClients("name");
+  const projectsQuery = useProjects("name");
+  const profileQuery = useProfile();
+  const entriesQuery = useReportEntries(appliedFilters);
+  const clients = clientsQuery.data || [];
+  const projects = projectsQuery.data || [];
+  const profile = profileQuery.data || null;
+  const entries = useMemo(() => entriesQuery.data || [], [entriesQuery.data]);
+  const loading = clientsQuery.isLoading || projectsQuery.isLoading || profileQuery.isLoading || entriesQuery.isFetching;
+  const error = clientsQuery.error || projectsQuery.error || profileQuery.error || entriesQuery.error;
 
   const filteredProjects = clientId === "all" ? projects : projects.filter((project) => project.client_id === clientId);
 
@@ -48,27 +51,8 @@ export function ReportsView({
     [entries]
   );
 
-  async function applyFilters() {
-    setLoading(true);
-    let query = supabase
-      .from("time_entries")
-      .select("*, clients(id, name, currency), projects(id, name)")
-      .gte("entry_date", startDate)
-      .lte("entry_date", endDate)
-      .order("entry_date", { ascending: false });
-
-    if (clientId !== "all") query = query.eq("client_id", clientId);
-    if (projectId !== "all") query = query.eq("project_id", projectId);
-
-    const { data, error } = await query.returns<TimeEntryWithRelations[]>();
-    setLoading(false);
-
-    if (error) {
-      toast({ title: "Không thể tải báo cáo", description: error.message, variant: "destructive" });
-      return;
-    }
-
-    setEntries(data || []);
+  function applyFilters() {
+    setAppliedFilters({ startDate, endDate, clientId, projectId });
     toast({ title: "Đã cập nhật báo cáo" });
   }
 
@@ -161,6 +145,12 @@ export function ReportsView({
           </div>
         </CardContent>
       </Card>
+
+      {error ? (
+        <Card className="rounded-[2rem] border-red-200/60 bg-red-50/70 text-red-700 dark:bg-red-950/30 dark:text-red-200">
+          <CardContent className="p-5">Không thể tải báo cáo: {error.message}</CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-3">
         <Card className="rounded-[1.7rem]">

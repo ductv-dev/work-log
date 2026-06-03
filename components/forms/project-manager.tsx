@@ -1,5 +1,6 @@
 "use client";
 
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Edit2, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { EmptyState } from "@/components/layout/empty-state";
@@ -14,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
 import { formatMoney } from "@/lib/calculations";
+import { queryKeys } from "@/lib/query/keys";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import type { Client } from "@/lib/types/database";
 import type { ProjectWithClient } from "@/lib/types/app";
@@ -37,41 +39,76 @@ const emptyForm: ProjectFormState = {
 };
 
 export function ProjectManager({
-  initialProjects,
+  projects,
   clients,
   userId
 }: {
-  initialProjects: ProjectWithClient[];
+  projects: ProjectWithClient[];
   clients: Client[];
   userId: string;
 }) {
-  const [projects, setProjects] = useState(initialProjects);
+  const queryClient = useQueryClient();
   const [clientFilter, setClientFilter] = useState("all");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<ProjectWithClient | null>(null);
   const [form, setForm] = useState<ProjectFormState>(emptyForm);
-  const [loading, setLoading] = useState(false);
-  const supabase = createSupabaseClient();
+  const saveProjectMutation = useMutation({
+    mutationFn: async () => {
+      const rate = Number(form.hourly_rate || 0);
+      const payload = {
+        user_id: userId,
+        client_id: form.client_id === "none" ? null : form.client_id,
+        name: form.name.trim(),
+        description: form.description.trim() || null,
+        hourly_rate: rate,
+        status: form.status,
+        is_billable: form.is_billable
+      };
+      const supabase = createSupabaseClient();
+      const request = editing
+        ? supabase.from("projects").update(payload).eq("id", editing.id).select().single()
+        : supabase.from("projects").insert(payload).select().single();
+      const { error } = await request;
+
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.timeEntries.all })
+      ]);
+      toast({ title: editing ? "Đã cập nhật dự án" : "Đã tạo dự án" });
+      setOpen(false);
+    },
+    onError: (error) => {
+      toast({ title: "Không thể lưu dự án", description: error.message, variant: "destructive" });
+    }
+  });
+  const deleteProjectMutation = useMutation({
+    mutationFn: async (project: ProjectWithClient) => {
+      const supabase = createSupabaseClient();
+      const { error } = await supabase.from("projects").delete().eq("id", project.id);
+
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.timeEntries.all })
+      ]);
+      toast({ title: "Đã xóa dự án" });
+    },
+    onError: (error) => {
+      toast({ title: "Không thể xóa dự án", description: error.message, variant: "destructive" });
+    }
+  });
 
   const filtered = useMemo(
     () => (clientFilter === "all" ? projects : projects.filter((project) => project.client_id === clientFilter)),
     [clientFilter, projects]
   );
-
-  function enrichProject(project: ProjectWithClient): ProjectWithClient {
-    const client = clients.find((item) => item.id === project.client_id);
-    return {
-      ...project,
-      clients: client
-        ? {
-            id: client.id,
-            name: client.name,
-            default_hourly_rate: client.default_hourly_rate,
-            currency: client.currency
-          }
-        : null
-    };
-  }
 
   function openCreate() {
     setEditing(null);
@@ -106,48 +143,12 @@ export function ProjectManager({
       return;
     }
 
-    setLoading(true);
-    const payload = {
-      user_id: userId,
-      client_id: form.client_id === "none" ? null : form.client_id,
-      name: form.name.trim(),
-      description: form.description.trim() || null,
-      hourly_rate: rate,
-      status: form.status,
-      is_billable: form.is_billable
-    };
-
-    const request = editing
-      ? supabase.from("projects").update(payload).eq("id", editing.id).select().single()
-      : supabase.from("projects").insert(payload).select().single();
-
-    const { data, error } = await request;
-    setLoading(false);
-
-    if (error) {
-      toast({ title: "Không thể lưu dự án", description: error.message, variant: "destructive" });
-      return;
-    }
-
-    const enriched = enrichProject(data as ProjectWithClient);
-    setProjects((current) =>
-      editing ? current.map((project) => (project.id === enriched.id ? enriched : project)) : [enriched, ...current]
-    );
-    toast({ title: editing ? "Đã cập nhật dự án" : "Đã tạo dự án" });
-    setOpen(false);
+    saveProjectMutation.mutate();
   }
 
   async function deleteProject(project: ProjectWithClient) {
     if (!window.confirm(`Xóa ${project.name}? Các bản ghi thời gian đã tạo sẽ giữ nguyên dữ liệu đã lưu.`)) return;
-    const { error } = await supabase.from("projects").delete().eq("id", project.id);
-
-    if (error) {
-      toast({ title: "Không thể xóa dự án", description: error.message, variant: "destructive" });
-      return;
-    }
-
-    setProjects((current) => current.filter((item) => item.id !== project.id));
-    toast({ title: "Đã xóa dự án" });
+    deleteProjectMutation.mutate(project);
   }
 
   return (
@@ -228,7 +229,7 @@ export function ProjectManager({
                 <Checkbox checked={form.is_billable} onCheckedChange={(checked) => setForm({ ...form, is_billable: checked === true })} />
                 Mặc định tính phí
               </label>
-              <Button disabled={loading}>{loading ? "Đang lưu..." : "Lưu dự án"}</Button>
+              <Button disabled={saveProjectMutation.isPending}>{saveProjectMutation.isPending ? "Đang lưu..." : "Lưu dự án"}</Button>
             </form>
           </DialogContent>
         </Dialog>

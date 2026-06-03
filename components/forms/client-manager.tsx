@@ -1,5 +1,6 @@
 "use client";
 
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Edit2, Plus, Search, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
 import { EmptyState } from "@/components/layout/empty-state";
 import { formatMoney } from "@/lib/calculations";
+import { queryKeys } from "@/lib/query/keys";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import type { Client } from "@/lib/types/database";
 
@@ -34,14 +36,66 @@ const emptyForm: ClientFormState = {
   currency: "VND"
 };
 
-export function ClientManager({ initialClients, userId }: { initialClients: Client[]; userId: string }) {
-  const [clients, setClients] = useState(initialClients);
+export function ClientManager({ clients, userId }: { clients: Client[]; userId: string }) {
+  const queryClient = useQueryClient();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Client | null>(null);
   const [form, setForm] = useState<ClientFormState>(emptyForm);
-  const [loading, setLoading] = useState(false);
-  const supabase = createSupabaseClient();
+  const saveClientMutation = useMutation({
+    mutationFn: async () => {
+      const rate = Number(form.default_hourly_rate || 0);
+      const payload = {
+        user_id: userId,
+        name: form.name.trim(),
+        email: form.email.trim() || null,
+        phone: form.phone.trim() || null,
+        note: form.note.trim() || null,
+        default_hourly_rate: rate,
+        currency: form.currency
+      };
+      const supabase = createSupabaseClient();
+      const request = editing
+        ? supabase.from("clients").update(payload).eq("id", editing.id).select().single()
+        : supabase.from("clients").insert(payload).select().single();
+      const { error } = await request;
+
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.clients.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.timeEntries.all })
+      ]);
+      toast({ title: editing ? "Đã cập nhật khách hàng" : "Đã tạo khách hàng" });
+      setOpen(false);
+    },
+    onError: (error) => {
+      toast({ title: "Không thể lưu khách hàng", description: error.message, variant: "destructive" });
+    }
+  });
+  const deleteClientMutation = useMutation({
+    mutationFn: async (client: Client) => {
+      const supabase = createSupabaseClient();
+      const { error } = await supabase.from("clients").delete().eq("id", client.id);
+
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.clients.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.timeEntries.all })
+      ]);
+      toast({ title: "Đã xóa khách hàng" });
+    },
+    onError: (error) => {
+      toast({ title: "Không thể xóa khách hàng", description: error.message, variant: "destructive" });
+    }
+  });
 
   const filtered = useMemo(
     () => clients.filter((client) => client.name.toLowerCase().includes(query.toLowerCase())),
@@ -81,47 +135,12 @@ export function ClientManager({ initialClients, userId }: { initialClients: Clie
       return;
     }
 
-    setLoading(true);
-    const payload = {
-      user_id: userId,
-      name: form.name.trim(),
-      email: form.email.trim() || null,
-      phone: form.phone.trim() || null,
-      note: form.note.trim() || null,
-      default_hourly_rate: rate,
-      currency: form.currency
-    };
-
-    const request = editing
-      ? supabase.from("clients").update(payload).eq("id", editing.id).select().single()
-      : supabase.from("clients").insert(payload).select().single();
-
-    const { data, error } = await request;
-    setLoading(false);
-
-    if (error) {
-      toast({ title: "Không thể lưu khách hàng", description: error.message, variant: "destructive" });
-      return;
-    }
-
-    setClients((current) =>
-      editing ? current.map((client) => (client.id === data.id ? data : client)) : [data, ...current]
-    );
-    toast({ title: editing ? "Đã cập nhật khách hàng" : "Đã tạo khách hàng" });
-    setOpen(false);
+    saveClientMutation.mutate();
   }
 
   async function deleteClient(client: Client) {
     if (!window.confirm(`Xóa ${client.name}? Các dự án thuộc khách hàng này cũng sẽ bị xóa.`)) return;
-    const { error } = await supabase.from("clients").delete().eq("id", client.id);
-
-    if (error) {
-      toast({ title: "Không thể xóa khách hàng", description: error.message, variant: "destructive" });
-      return;
-    }
-
-    setClients((current) => current.filter((item) => item.id !== client.id));
-    toast({ title: "Đã xóa khách hàng" });
+    deleteClientMutation.mutate(client);
   }
 
   return (
@@ -180,7 +199,7 @@ export function ClientManager({ initialClients, userId }: { initialClients: Clie
                 <Label htmlFor="client-note">Ghi chú</Label>
                 <Textarea id="client-note" value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} />
               </div>
-              <Button disabled={loading}>{loading ? "Đang lưu..." : "Lưu khách hàng"}</Button>
+              <Button disabled={saveClientMutation.isPending}>{saveClientMutation.isPending ? "Đang lưu..." : "Lưu khách hàng"}</Button>
             </form>
           </DialogContent>
         </Dialog>

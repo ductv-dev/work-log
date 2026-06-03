@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
+import { useEffect } from "react";
 import {
   BarChart3,
   BookOpenText,
@@ -20,6 +21,7 @@ import { AppHeader } from "@/components/layout/app-header";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { IOSButton } from "@/components/ui/ios-button";
 import { createClient } from "@/lib/supabase/client";
+import { useAppStore } from "@/lib/stores/app-store";
 import { cn } from "@/lib/utils";
 import { toast } from "@/components/ui/toast";
 
@@ -44,6 +46,11 @@ export function AppShell({
   const router = useRouter();
   const { theme, setTheme } = useTheme();
   const supabase = createClient();
+  const setLastPathname = useAppStore((state) => state.setLastPathname);
+
+  useEffect(() => {
+    setLastPathname(pathname);
+  }, [pathname, setLastPathname]);
 
   async function handleLogout() {
     await supabase.auth.signOut();

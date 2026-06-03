@@ -1,3 +1,5 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 import { CalendarDays, Clock3, FolderKanban, ReceiptText, Timer } from "lucide-react";
@@ -7,57 +9,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/layout/empty-state";
 import { PageHeader } from "@/components/layout/page-header";
 import { formatDuration, formatMoney } from "@/lib/calculations";
-import { endOfCurrentWeekISO, startOfCurrentMonthISO, startOfCurrentWeekISO, todayISO } from "@/lib/dates";
-import { createClient } from "@/lib/supabase/server";
-import type { TimeEntryWithRelations } from "@/lib/types/app";
+import { useDashboardData } from "@/lib/hooks/use-worklog-queries";
 
-export default async function DashboardPage() {
-  const supabase = await createClient();
-  const today = todayISO();
-  const weekStart = startOfCurrentWeekISO();
-  const weekEnd = endOfCurrentWeekISO();
-  const monthStart = startOfCurrentMonthISO();
+export default function DashboardPage() {
+  const { data, error, isLoading } = useDashboardData();
 
-  const [{ data: profile }, { data: weekEntries }, { data: monthEntries }, { data: recentEntries }, { count: activeProjects }] = await Promise.all([
-    supabase.from("profiles").select("*").single(),
-    supabase
-      .from("time_entries")
-      .select("*, clients(id, name, currency), projects(id, name)")
-      .gte("entry_date", weekStart)
-      .lte("entry_date", weekEnd)
-      .order("entry_date", { ascending: false })
-      .returns<TimeEntryWithRelations[]>(),
-    supabase
-      .from("time_entries")
-      .select("duration_minutes")
-      .gte("entry_date", monthStart)
-      .returns<{ duration_minutes: number }[]>(),
-    supabase
-      .from("time_entries")
-      .select("*, clients(id, name, currency), projects(id, name)")
-      .order("created_at", { ascending: false })
-      .limit(5)
-      .returns<TimeEntryWithRelations[]>(),
-    supabase.from("projects").select("id", { count: "exact", head: true }).eq("status", "active")
-  ]);
-
-  const entries = weekEntries || [];
-  const todayMinutes = entries
-    .filter((entry) => entry.entry_date === today)
-    .reduce((sum, entry) => sum + entry.duration_minutes, 0);
-  const weekMinutes = entries.reduce((sum, entry) => sum + entry.duration_minutes, 0);
-  const weekAmount = entries.reduce((sum, entry) => sum + Number(entry.amount), 0);
-  const monthMinutes = (monthEntries || []).reduce((sum, entry) => sum + entry.duration_minutes, 0);
-  const currency = profile?.currency || entries[0]?.clients?.currency || "VND";
-
-  const projectTotals = Object.values(
-    entries.reduce<Record<string, { id: string; name: string; minutes: number }>>((acc, entry) => {
-      const id = entry.project_id || "none";
-      acc[id] ||= { id, name: entry.projects?.name || "Không có dự án", minutes: 0 };
-      acc[id].minutes += entry.duration_minutes;
-      return acc;
-    }, {})
-  ).sort((a, b) => b.minutes - a.minutes);
+  const todayMinutes = data?.todayMinutes || 0;
+  const weekMinutes = data?.weekMinutes || 0;
+  const weekAmount = data?.weekAmount || 0;
+  const monthMinutes = data?.monthMinutes || 0;
+  const currency = data?.currency || "VND";
+  const projectTotals = data?.projectTotals || [];
+  const recentEntries = data?.recentEntries || [];
+  const activeProjects = data?.activeProjects || 0;
 
   const maxProjectMinutes = Math.max(...projectTotals.map((project) => project.minutes), 1);
 
@@ -65,6 +29,11 @@ export default async function DashboardPage() {
     <>
       <PageHeader title="Tổng quan" description="Theo dõi giờ làm, tiền tính phí và hoạt động trong tuần hiện tại." />
       <section className="space-y-5">
+        {error ? (
+          <Card className="rounded-[2rem] border-red-200/60 bg-red-50/70 text-red-700 dark:bg-red-950/30 dark:text-red-200">
+            <CardContent className="p-5">Không thể tải dashboard: {error.message}</CardContent>
+          </Card>
+        ) : null}
         <Card className="overflow-hidden rounded-[2rem]">
           <CardContent className="grid gap-5 p-5 sm:grid-cols-[1fr_auto] sm:items-center sm:p-6">
             <div className="flex items-center gap-4">
@@ -94,18 +63,18 @@ export default async function DashboardPage() {
         <div>
           <h2 className="mb-3 px-1 text-lg font-bold tracking-tight">Hôm nay</h2>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            <StatCard title="Giờ hôm nay" value={formatDuration(todayMinutes)} icon={<Timer className="h-5 w-5" />} />
-            <StatCard title="Dự án đang chạy" value={String(activeProjects || 0)} icon={<FolderKanban className="h-5 w-5" />} />
-            <StatCard title="Tháng này" value={formatDuration(monthMinutes)} icon={<CalendarDays className="h-5 w-5" />} />
+            <StatCard title="Giờ hôm nay" value={isLoading ? "..." : formatDuration(todayMinutes)} icon={<Timer className="h-5 w-5" />} />
+            <StatCard title="Dự án đang chạy" value={isLoading ? "..." : String(activeProjects)} icon={<FolderKanban className="h-5 w-5" />} />
+            <StatCard title="Tháng này" value={isLoading ? "..." : formatDuration(monthMinutes)} icon={<CalendarDays className="h-5 w-5" />} />
           </div>
         </div>
 
         <div>
           <h2 className="mb-3 px-1 text-lg font-bold tracking-tight">Tuần này</h2>
           <div className="grid gap-3 sm:grid-cols-2">
-          <StatCard title="Hôm nay" value={formatDuration(todayMinutes)} icon={<Timer className="h-5 w-5" />} />
-          <StatCard title="Tuần này" value={formatDuration(weekMinutes)} icon={<Clock3 className="h-5 w-5" />} />
-          <StatCard title="Tiền tuần này" value={formatMoney(weekAmount, currency)} icon={<ReceiptText className="h-5 w-5" />} />
+          <StatCard title="Hôm nay" value={isLoading ? "..." : formatDuration(todayMinutes)} icon={<Timer className="h-5 w-5" />} />
+          <StatCard title="Tuần này" value={isLoading ? "..." : formatDuration(weekMinutes)} icon={<Clock3 className="h-5 w-5" />} />
+          <StatCard title="Tiền tuần này" value={isLoading ? "..." : formatMoney(weekAmount, currency)} icon={<ReceiptText className="h-5 w-5" />} />
           </div>
         </div>
 
@@ -140,7 +109,9 @@ export default async function DashboardPage() {
               <CardTitle>Bản ghi thời gian gần đây</CardTitle>
             </CardHeader>
             <CardContent>
-              {!recentEntries?.length ? (
+              {isLoading ? (
+                <EmptyState title="Đang tải bản ghi" description="WorkLog đang đồng bộ dữ liệu mới nhất." />
+              ) : !recentEntries.length ? (
                 <EmptyState title="Chưa có bản ghi thời gian" description="Các bản ghi thời gian mới nhất sẽ xuất hiện tại đây." />
               ) : (
                 <div className="space-y-3">

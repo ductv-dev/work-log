@@ -3,6 +3,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/toast";
 import { PWARegister } from "@/components/pwa-register";
+import { TanStackQueryProvider } from "@/lib/query/query-provider";
 
 export const metadata: Metadata = {
   title: "WorkLog",
@@ -35,11 +36,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="vi" suppressHydrationWarning>
       <body>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <PWARegister />
-          {children}
-          <Toaster />
-        </ThemeProvider>
+        <TanStackQueryProvider>
+          <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+            <PWARegister />
+            {children}
+            <Toaster />
+          </ThemeProvider>
+        </TanStackQueryProvider>
       </body>
     </html>
   );

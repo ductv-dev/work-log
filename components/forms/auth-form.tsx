@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { type FormEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -18,8 +18,15 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const supabase = createClient();
   const isLogin = mode === "login";
 
-  async function handleSubmit(formData: FormData) {
+  function getRedirectPath() {
+    const redirectedFrom = searchParams.get("redirectedFrom");
+    return redirectedFrom?.startsWith("/") ? redirectedFrom : "/dashboard";
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     setLoading(true);
+    const formData = new FormData(event.currentTarget);
     const email = String(formData.get("email") || "");
     const password = String(formData.get("password") || "");
     const fullName = String(formData.get("full_name") || "");
@@ -35,15 +42,30 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           }
         });
 
-    setLoading(false);
-
     if (result.error) {
+      setLoading(false);
       toast({ title: "Đăng nhập/đăng ký thất bại", description: result.error.message, variant: "destructive" });
       return;
     }
 
+    const {
+      data: { session }
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      setLoading(false);
+      toast({
+        title: isLogin ? "Chưa tạo được phiên đăng nhập" : "Đã tạo tài khoản",
+        description: isLogin
+          ? "Vui lòng thử đăng nhập lại sau vài giây."
+          : "Nếu Supabase bật xác nhận email, hãy kiểm tra hộp thư trước khi đăng nhập."
+      });
+      if (!isLogin) router.replace("/login");
+      return;
+    }
+
     toast({ title: isLogin ? "Chào mừng bạn quay lại" : "Đã tạo tài khoản" });
-    router.push(searchParams.get("redirectedFrom") || "/dashboard");
+    router.replace(getRedirectPath());
     router.refresh();
   }
 
@@ -57,7 +79,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
         <CardDescription>{isLogin ? "Ghi thời gian, tính phí chính xác và xuất báo cáo gọn gàng." : "Bắt đầu bằng email và mật khẩu."}</CardDescription>
       </CardHeader>
       <CardContent>
-        <form action={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           {!isLogin ? (
             <div className="space-y-2">
               <Label htmlFor="full_name">Họ tên</Label>
@@ -72,7 +94,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
             <Label htmlFor="password">Mật khẩu</Label>
             <Input id="password" name="password" type="password" autoComplete={isLogin ? "current-password" : "new-password"} required minLength={6} />
           </div>
-          <Button className="w-full" disabled={loading}>
+          <Button className="w-full" disabled={loading} type="submit">
             {loading ? "Đang xử lý..." : isLogin ? "Đăng nhập" : "Đăng ký"}
           </Button>
         </form>
