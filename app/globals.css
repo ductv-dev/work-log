@@ -1,0 +1,150 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 232 100% 97%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --primary: 245 83% 62%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 230 100% 94%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 240 28% 94%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 258 90% 66%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 100%;
+    --input: 0 0% 100%;
+    --ring: 245 83% 62%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222 47% 6%;
+    --foreground: 0 0% 100%;
+    --card: 0 0% 0%;
+    --card-foreground: 0 0% 100%;
+    --primary: 245 93% 72%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 222 34% 18%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 222 30% 16%;
+    --muted-foreground: 215 20% 72%;
+    --accent: 258 93% 76%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 70% 52%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 100%;
+    --input: 0 0% 100%;
+    --ring: 245 93% 72%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    background: linear-gradient(135deg, #eef2ff 0%, #fdf2f8 100%);
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow-x: hidden;
+  }
+
+  .dark body {
+    background: linear-gradient(135deg, #020617 0%, #111827 100%);
+  }
+
+  input,
+  textarea,
+  select,
+  button {
+    letter-spacing: 0;
+  }
+}
+
+@layer components {
+  .app-gradient {
+    background: linear-gradient(135deg, #eef2ff 0%, #fdf2f8 100%);
+  }
+
+  .dark .app-gradient {
+    background: linear-gradient(135deg, #020617 0%, #111827 100%);
+  }
+
+  .app-surface {
+    background-image:
+      radial-gradient(circle at 12% 8%, rgb(129 140 248 / 0.22), transparent 28%),
+      radial-gradient(circle at 88% 20%, rgb(217 70 239 / 0.18), transparent 30%),
+      radial-gradient(circle at 50% 90%, rgb(59 130 246 / 0.12), transparent 35%);
+  }
+
+  .ios-container {
+    width: min(100%, 1180px);
+    margin-inline: auto;
+    padding-inline: 1rem;
+  }
+
+  .glass {
+    @apply border border-white/20 bg-white/60 shadow-[0_24px_70px_rgb(15_23_42/0.12)] backdrop-blur-xl dark:bg-black/30 dark:shadow-[0_24px_70px_rgb(0_0_0/0.28)];
+  }
+
+  .soft-card {
+    box-shadow: 0 24px 70px rgb(15 23 42 / 0.12);
+  }
+
+  .cute-gradient {
+    background:
+      linear-gradient(135deg, #3b82f6 0%, #8b5cf6 54%, #d946ef 100%);
+  }
+
+  .mint-gradient {
+    background:
+      linear-gradient(135deg, hsl(173 80% 88%) 0%, hsl(203 100% 88%) 100%);
+  }
+
+  .screen-enter {
+    animation: screen-enter 420ms ease both;
+  }
+
+  .floaty {
+    animation: floaty 4.5s ease-in-out infinite;
+  }
+
+  .tap-pop {
+    transition:
+      transform 160ms ease,
+      box-shadow 160ms ease,
+      background-color 160ms ease;
+  }
+
+  .tap-pop:active {
+    transform: scale(0.97);
+  }
+}
+
+@keyframes screen-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes floaty {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-1deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(1deg);
+  }
+}

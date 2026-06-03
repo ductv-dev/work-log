@@ -1,0 +1,34 @@
+{
+  "name": "WorkLog",
+  "short_name": "WorkLog",
+  "description": "Ghi giờ làm, tính phí và xuất báo cáo cho freelancer.",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#EEF2FF",
+  "theme_color": "#6366F1",
+  "categories": ["productivity", "business", "finance"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/images/worklog-mascot.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "form_factor": "narrow"
+    }
+  ]
+}
