@@ -15,17 +15,12 @@ import { toast } from "@/components/ui/toast";
 import { calculateAmount, formatMoney, formatTimer, getDurationMinutes, resolveHourlyRate } from "@/lib/calculations";
 import { todayISO } from "@/lib/dates";
 import { queryKeys } from "@/lib/query/keys";
+import { useAppStore } from "@/lib/stores/app-store";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import type { Client, Profile } from "@/lib/types/database";
 import type { ProjectWithClient } from "@/lib/types/app";
 
-type RunningTimer = {
-  clientId: string;
-  projectId: string;
-  description: string;
-  isBillable: boolean;
-  startedAt: Date;
-};
+
 
 type TimeEntryPayload = {
   user_id: string;
@@ -57,8 +52,24 @@ export function TimeTracker({
   const [timerProjectId, setTimerProjectId] = useState("none");
   const [timerDescription, setTimerDescription] = useState("");
   const [timerBillable, setTimerBillable] = useState(true);
-  const [running, setRunning] = useState<RunningTimer | null>(null);
+  const running = useAppStore((state) => state.runningTimer);
+  const setRunning = useAppStore((state) => state.setRunningTimer);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    if (running) {
+      setTimerClientId(running.clientId);
+      setTimerProjectId(running.projectId);
+      setTimerDescription(running.description);
+      setTimerBillable(running.isBillable);
+      
+      const now = Date.now();
+      const startedAt = new Date(running.startedAt).getTime();
+      setElapsedSeconds(Math.max(0, Math.floor((now - startedAt) / 1000)));
+    } else {
+      setElapsedSeconds(0);
+    }
+  }, [running]);
 
   const [manualClientId, setManualClientId] = useState("none");
   const [manualProjectId, setManualProjectId] = useState("none");
@@ -88,7 +99,7 @@ export function TimeTracker({
   useEffect(() => {
     if (!running) return;
     const interval = window.setInterval(() => {
-      setElapsedSeconds(Math.max(0, Math.floor((Date.now() - running.startedAt.getTime()) / 1000)));
+      setElapsedSeconds(Math.max(0, Math.floor((Date.now() - new Date(running.startedAt).getTime()) / 1000)));
     }, 1000);
     return () => window.clearInterval(interval);
   }, [running]);
@@ -133,7 +144,7 @@ export function TimeTracker({
       projectId: timerProjectId,
       description: timerDescription.trim(),
       isBillable: timerBillable,
-      startedAt: new Date()
+      startedAt: new Date().toISOString()
     });
     setElapsedSeconds(0);
     toast({ title: "Đã bắt đầu bộ đếm" });
@@ -145,8 +156,9 @@ export function TimeTracker({
       return;
     }
 
+    const startedAtDate = new Date(running.startedAt);
     const end = new Date();
-    const durationMinutes = getDurationMinutes(running.startedAt, end);
+    const durationMinutes = getDurationMinutes(startedAtDate, end);
     const preview = buildBillingPreview(projects, clients, profile, running.projectId, running.isBillable, durationMinutes);
 
     try {
@@ -155,13 +167,13 @@ export function TimeTracker({
         client_id: running.clientId === "none" ? preview.clientId : running.clientId,
         project_id: running.projectId,
         description: running.description,
-        start_time: running.startedAt.toISOString(),
+        start_time: running.startedAt,
         end_time: end.toISOString(),
         duration_minutes: durationMinutes,
         hourly_rate: preview.hourlyRate,
         amount: preview.amount,
         is_billable: running.isBillable,
-        entry_date: running.startedAt.toISOString().slice(0, 10)
+        entry_date: running.startedAt.slice(0, 10)
       });
     } catch (error) {
       toast({ title: "Không thể lưu bản ghi thời gian từ bộ đếm", description: error instanceof Error ? error.message : "Vui lòng thử lại.", variant: "destructive" });

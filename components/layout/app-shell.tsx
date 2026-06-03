@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { AppHeader } from "@/components/layout/app-header";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
+import { MiniTimer } from "@/components/layout/mini-timer";
 import { IOSButton } from "@/components/ui/ios-button";
 import { createClient } from "@/lib/supabase/client";
 import { useAppStore } from "@/lib/stores/app-store";
@@ -122,6 +123,7 @@ export function AppShell({
       </main>
 
       <MobileBottomNav />
+      <MiniTimer />
     </div>
   );
 }
