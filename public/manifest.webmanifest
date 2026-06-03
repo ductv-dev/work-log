@@ -2,7 +2,7 @@
   "name": "WorkLog",
   "short_name": "WorkLog",
   "description": "Ghi giờ làm, tính phí và xuất báo cáo cho freelancer.",
-  "start_url": "/dashboard",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",

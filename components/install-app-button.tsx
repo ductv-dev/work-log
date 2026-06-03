@@ -3,13 +3,25 @@
 import { Download } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/toast";
+import { cn } from "@/lib/utils";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
 
-export function InstallAppButton() {
+export function InstallAppButton({
+  alwaysVisible = false,
+  children = "Cài app",
+  className,
+  variant = "secondary"
+}: {
+  alwaysVisible?: boolean;
+  children?: React.ReactNode;
+  className?: string;
+  variant?: "default" | "secondary" | "outline" | "ghost";
+}) {
   const [promptEvent, setPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(false);
 
@@ -33,10 +45,17 @@ export function InstallAppButton() {
     };
   }, []);
 
-  if (!promptEvent || installed) return null;
+  if ((!promptEvent && !alwaysVisible) || installed) return null;
 
   async function install() {
-    if (!promptEvent) return;
+    if (!promptEvent) {
+      toast({
+        title: "Cài WorkLog",
+        description: "Trên iPhone: bấm Share rồi chọn Add to Home Screen. Trên Chrome/Edge: mở menu trình duyệt rồi chọn Install app."
+      });
+      return;
+    }
+
     await promptEvent.prompt();
     const choice = await promptEvent.userChoice;
     if (choice.outcome === "accepted") {
@@ -46,9 +65,9 @@ export function InstallAppButton() {
   }
 
   return (
-    <Button type="button" variant="secondary" onClick={install}>
+    <Button type="button" variant={variant} onClick={install} className={cn(className)}>
       <Download className="h-4 w-4" />
-      Cài app
+      {children}
     </Button>
   );
 }
